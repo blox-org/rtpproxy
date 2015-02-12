@@ -65,6 +65,12 @@
 #define	CMD_SOCK	"/var/run/rtpproxy.sock"
 #define	PID_FILE	"/var/run/rtpproxy.pid"
 
+#ifdef MINIUPNPD
+#define MAX_RTP_TIMEOUT (60*60*24*2) /* 2 Days */
+#define RTP_UDP 1
+#define RTP_TCP 2
+#endif
+
 /*
  * TTL counters are used to detect the absence of audio packets
  * in either direction.  When the counter reaches 0, the call timeout

@@ -54,6 +54,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <gcrypt.h>
 
 #include "rtp.h"
 #include "rtp_resizer.h"
@@ -64,6 +65,14 @@
 #include "rtpp_record.h"
 #include "rtpp_session.h"
 #include "rtpp_util.h"
+
+#ifdef MINIUPNPD
+#include "rtpp_mupnpd.h"
+int mupnpfd = -1;
+char *secret = NULL;
+#include <readline/readline.h>
+#endif
+
 
 static const char *cmd_sock = CMD_SOCK;
 static const char *pid_file = PID_FILE;
@@ -434,6 +443,59 @@ init_config(struct cfg *cf, int argc, char **argv)
     }
 }
 
+#ifdef MINIUPNPD
+static int
+init_mupnpfd(struct cfg *cf)
+{
+  struct sockaddr_storage ifsin;
+  struct sockaddr_in connect_address;
+  unsigned int port = 5351;
+  char *portno ;
+
+  secret = getenv("MINIUPNPD_SECRET");
+  while(!secret) {
+    secret = readline("Miniupnp Secret: ");
+    if(strlen(secret) == 0) {
+      free(secret);
+      secret = NULL;
+    }
+  }
+
+  if((portno = getenv("MINIUPNPD_PORT"))) {
+    port = atoi(portno);
+  }
+
+  /* Initialize libgcrypt. Don't need secure memory. */
+  if (!gcry_check_version(GCRYPT_VERSION)) {
+    fputs("libgcrypt version mismatch.\n", stderr);
+    return -1;
+  }
+
+  gcry_control(GCRYCTL_DISABLE_SECMEM, 0);
+  gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
+
+  mupnpfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (mupnpfd == -1)
+      err(1, "can't create upnp socket");
+
+  //int flags = fcntl(mupnpfd, F_GETFL);
+  //fcntl(mupnpfd, F_SETFL, flags | O_NONBLOCK);
+
+  connect_address = *((struct sockaddr_in *)cf->bindaddr[0]);
+  connect_address.sin_port = htons((short)port) ;
+
+  fprintf(stderr, "connecting socket to %s:%u :%s:\n", inet_ntoa(connect_address.sin_addr), ntohs(connect_address.sin_port), secret);
+
+  if (connect(mupnpfd, (struct sockaddr *)&connect_address, (socklen_t)sizeof(connect_address)) < 0) {
+    err(1, "Failed to connect socket to %s:%u\n",
+      inet_ntoa(connect_address.sin_addr),
+      ntohs(connect_address.sin_port));
+  }
+
+  return mupnpfd;
+}
+#endif
+
 static int
 init_controlfd(struct cfg *cf)
 {
@@ -796,6 +858,10 @@ main(int argc, char **argv)
     init_port_table(&cf);
 
     controlfd = init_controlfd(&cf);
+#ifdef MINIUPNPD
+    mupnpfd = init_mupnpfd(&cf);
+    discover_ip_auth(mupnpfd);
+#endif
 
     if (cf.nodaemon == 0) {
 	if (rtpp_daemon(0, 0) == -1)

@@ -44,6 +44,13 @@
 #include "rtpp_session.h"
 #include "rtpp_util.h"
 
+#ifdef MINIUPNPD
+#include "rtpp_mupnpd.h"
+extern char *secret ;
+extern int mupnpfd;
+#endif
+
+
 void
 init_hash_table(struct cfg *cf)
 {
@@ -170,42 +177,45 @@ remove_session(struct cfg *cf, struct rtpp_session *sp)
     rtpp_log_write(RTPP_LOG_INFO, sp->log, "session on ports %d/%d is cleaned up",
       sp->ports[0], sp->ports[1]);
     for (i = 0; i < 2; i++) {
-	if (sp->addr[i] != NULL)
-	    free(sp->addr[i]);
-	if (sp->prev_addr[i] != NULL)
-	    free(sp->prev_addr[i]);
-	if (sp->rtcp->addr[i] != NULL)
-	    free(sp->rtcp->addr[i]);
-	if (sp->rtcp->prev_addr[i] != NULL)
-	    free(sp->rtcp->prev_addr[i]);
-	if (sp->fds[i] != -1) {
-	    close(sp->fds[i]);
-	    assert(cf->sessions[sp->sidx[i]] == sp);
-	    cf->sessions[sp->sidx[i]] = NULL;
-	    assert(cf->pfds[sp->sidx[i]].fd == sp->fds[i]);
-	    cf->pfds[sp->sidx[i]].fd = -1;
-	    cf->pfds[sp->sidx[i]].events = 0;
-	}
-	if (sp->rtcp->fds[i] != -1) {
-	    close(sp->rtcp->fds[i]);
-	    assert(cf->sessions[sp->rtcp->sidx[i]] == sp->rtcp);
-	    cf->sessions[sp->rtcp->sidx[i]] = NULL;
-	    assert(cf->pfds[sp->rtcp->sidx[i]].fd == sp->rtcp->fds[i]);
-	    cf->pfds[sp->rtcp->sidx[i]].fd = -1;
-	    cf->pfds[sp->rtcp->sidx[i]].events = 0;
-	}
-	if (sp->rrcs[i] != NULL)
-	    rclose(sp, sp->rrcs[i], 1);
-	if (sp->rtcp->rrcs[i] != NULL)
-	    rclose(sp, sp->rtcp->rrcs[i], 1);
-	if (sp->rtps[i] != NULL) {
-	    cf->rtp_servers[sp->sridx] = NULL;
-	    rtp_server_free(sp->rtps[i]);
-	}
-	if (sp->codecs[i] != NULL)
-	    free(sp->codecs[i]);
-	if (sp->rtcp->codecs[i] != NULL)
-	    free(sp->rtcp->codecs[i]);
+#ifdef MINIUPNPD
+        map_port_auth(mupnpfd,RTP_UDP,sp->ports[i],sp->ports[i],0); /* Reset timer to '0' to close immediately */
+#endif
+        if (sp->addr[i] != NULL)
+            free(sp->addr[i]);
+        if (sp->prev_addr[i] != NULL)
+            free(sp->prev_addr[i]);
+        if (sp->rtcp->addr[i] != NULL)
+            free(sp->rtcp->addr[i]);
+        if (sp->rtcp->prev_addr[i] != NULL)
+            free(sp->rtcp->prev_addr[i]);
+        if (sp->fds[i] != -1) {
+            close(sp->fds[i]);
+            assert(cf->sessions[sp->sidx[i]] == sp);
+            cf->sessions[sp->sidx[i]] = NULL;
+            assert(cf->pfds[sp->sidx[i]].fd == sp->fds[i]);
+            cf->pfds[sp->sidx[i]].fd = -1;
+            cf->pfds[sp->sidx[i]].events = 0;
+        }
+        if (sp->rtcp->fds[i] != -1) {
+            close(sp->rtcp->fds[i]);
+            assert(cf->sessions[sp->rtcp->sidx[i]] == sp->rtcp);
+            cf->sessions[sp->rtcp->sidx[i]] = NULL;
+            assert(cf->pfds[sp->rtcp->sidx[i]].fd == sp->rtcp->fds[i]);
+            cf->pfds[sp->rtcp->sidx[i]].fd = -1;
+            cf->pfds[sp->rtcp->sidx[i]].events = 0;
+        }
+        if (sp->rrcs[i] != NULL)
+            rclose(sp, sp->rrcs[i], 1);
+        if (sp->rtcp->rrcs[i] != NULL)
+            rclose(sp, sp->rtcp->rrcs[i], 1);
+        if (sp->rtps[i] != NULL) {
+            cf->rtp_servers[sp->sridx] = NULL;
+            rtp_server_free(sp->rtps[i]);
+        }
+        if (sp->codecs[i] != NULL)
+            free(sp->codecs[i]);
+        if (sp->rtcp->codecs[i] != NULL)
+            free(sp->rtcp->codecs[i]);
     }
     if (sp->timeout_data.notify_tag != NULL)
 	free(sp->timeout_data.notify_tag);

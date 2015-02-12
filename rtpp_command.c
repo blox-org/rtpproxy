@@ -55,6 +55,13 @@
 #include "rtpp_session.h"
 #include "rtpp_util.h"
 
+#ifdef MINIUPNPD
+#include "rtpp_mupnpd.h"
+extern char *secret ;
+extern int mupnpfd;
+#endif
+
+
 struct proto_cap proto_caps[] = {
     /*
      * The first entry must be basic protocol version and isn't shown
@@ -140,6 +147,9 @@ create_listener(struct cfg *cf, struct sockaddr *ia, int *port, int *fds)
 	rval = create_twinlistener(cf, ia, *port, fds);
 	if (rval == 0) {
 	    cf->port_table_idx = idx;
+#ifdef MINIUPNPD
+	    map_port_auth(mupnpfd,RTP_UDP,*port,*port,MAX_RTP_TIMEOUT);
+#endif
 	    return 0;
 	}
 	if (rval == -1)
@@ -773,9 +783,9 @@ handle_command(struct cfg *cf, int controlfd, double dtime)
 	if (spa->fds[i] == -1) {
 	    j = ishostseq(cf->bindaddr[0], spa->laddr[i]) ? 0 : 1;
 	    if (create_listener(cf, spa->laddr[i], &lport, fds) == -1) {
-		rtpp_log_write(RTPP_LOG_ERR, spa->log, "can't create listener");
-		reply_error(cf, controlfd, &raddr, rlen, cookie, 7);
-		return 0;
+			rtpp_log_write(RTPP_LOG_ERR, spa->log, "can't create listener");
+			reply_error(cf, controlfd, &raddr, rlen, cookie, 7);
+			return 0;
 	    }
 	    assert(spa->fds[i] == -1);
 	    spa->fds[i] = fds[0];
@@ -819,6 +829,9 @@ handle_command(struct cfg *cf, int controlfd, double dtime)
 	    return 0;
 	}
 
+#ifdef MINIUPNPD
+/* PinHole the Port */
+#endif
 	/*
 	 * Session creation. If creation is requested with weak flag,
 	 * set weak[0].
